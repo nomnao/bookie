@@ -108,6 +108,31 @@ main{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;align
 .seg.hide{opacity:0}
 .seg svg{position:absolute;inset:0;width:100%;height:100%}
 
+/* bookmark ribbon: sage satin, lying in the fold when the book is open, peeking out of the bottom when it's closed */
+:root{--ribbon:#9DBDAF;--ribbon-dark:#7FA394}
+.ribbon{position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;
+  transition:transform .9s cubic-bezier(.45,.05,.2,1),width .9s cubic-bezier(.45,.05,.2,1),height .9s cubic-bezier(.45,.05,.2,1)}
+.ribbon i{position:absolute;inset:0;display:block;pointer-events:auto;cursor:pointer;
+  background:linear-gradient(90deg,var(--ribbon-dark),var(--ribbon) 30%,#B9D3C7 50%,var(--ribbon) 70%,var(--ribbon-dark));
+  clip-path:polygon(0 0,100% 0,100% 100%,50% calc(100% - var(--notch,8px)),0 100%);
+  transition:filter .2s ease}
+.ribbon b{position:absolute;left:-90%;right:-90%;bottom:-6px;height:var(--tail,40px);pointer-events:auto;cursor:pointer} /* a bigger, invisible place to tap the tail */
+.ribbon i:hover,.ribbon:hover i,.ribbon:focus-visible i{filter:brightness(1.08) saturate(1.15)}
+.ribbon:focus-visible{outline:none}
+/* the little "jump to" card */
+.ribbon-menu{position:fixed;z-index:60;min-width:11.5em;padding:.7em .9em .8em;background:var(--paper);color:var(--paper-ink);
+  font-family:var(--hand);font-size:1.15rem;line-height:1.2;rotate:-1.5deg;
+  border:1.5px solid var(--edge-line);border-radius:255px 15px 225px 15px/15px 225px 15px 255px;
+  box-shadow:0 .5em 1.4em rgba(94,86,84,.18);animation:ribbon-pop .22s ease-out}
+.ribbon-menu[hidden]{display:none}
+.ribbon-menu b{display:block;margin:0 0 .35em;font-size:1.05em;color:var(--bg-soft);font-weight:700}
+.ribbon-menu button{display:flex;gap:.6em;align-items:baseline;width:100%;padding:.18em .3em;border:0;background:none;color:inherit;
+  font:inherit;text-align:left;cursor:pointer;border-radius:.4em}
+.ribbon-menu button span{min-width:2.4em;color:var(--bg-soft);font-variant-numeric:tabular-nums}
+.ribbon-menu button:hover,.ribbon-menu button:focus-visible{background:#EEF4F0;outline:none}
+.ribbon-menu button[aria-current="page"]::after{content:"\2661";margin-left:auto;color:var(--accent)}
+@keyframes ribbon-pop{from{opacity:0;transform:translateY(-.3em) scale(.97)}}
+
 /* cover: smooth matte bookcloth, stab-bound with sage thread */
 :root{--thread:#8FB3A4;--edge:#F3EEE6;--edge-line:#E2D8CE}
 .cloth{background-color:var(--cloth);color:var(--cloth-ink);background-image:radial-gradient(130% 100% at 35% 25%,rgba(255,255,255,.12),rgba(255,255,255,0) 65%),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.6' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .32 0 0 0 0 .32 0 0 0 .1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");background-size:auto,220px 220px}
@@ -577,6 +602,11 @@ window.__rs=function(cw,ch){ var d=window.devicePixelRatio||1, k=Math.max(2,Math
 
   var gSoft=document.createElement('div'); gSoft.className='ground soft'; book.appendChild(gSoft);
   var gCon=document.createElement('div'); gCon.className='ground contact'; book.appendChild(gCon);
+
+  // bookmark ribbon: tap its tail for a little "jump to" card
+  var ribbon=document.createElement('div'); ribbon.className='ribbon'; ribbon.innerHTML='<i></i><b></b>';
+  ribbon.setAttribute('role','button'); ribbon.tabIndex=0; ribbon.setAttribute('aria-label','Bookmark ribbon. Jump to a page.'); ribbon.setAttribute('aria-haspopup','menu');
+  book.appendChild(ribbon);
   var W,H,tb,u,P,T,sq,M=N-2;
   function measure(){
     W=stage.clientWidth/2; H=stage.clientHeight;
@@ -625,6 +655,23 @@ window.__rs=function(cw,ch){ var d=window.devicePixelRatio||1, k=Math.max(2,Math
     if(spineShown) show(); else spineTimer=setTimeout(show,650);
   }
 
+  // open: the ribbon lies in the fold on top of the pages, its tail hanging below the book.
+  // closed: only the tail peeks out of the bottom of the pages, next to the spine.
+  function layoutRibbon(s){
+    var rw=Math.max(6,W*.034), tail=H*.13;
+    ribbon.style.setProperty('--notch',(rw*.7).toFixed(1)+'px');
+    ribbon.style.setProperty('--tail',(tail+6).toFixed(1)+'px');
+    if(s===0||s===N){
+      var x = s===0 ? W+W*.16 : W-W*.16-rw;
+      put(ribbon,rw,tail+sq,'translate3d('+x+'px,'+(H-sq)+'px,'+(-T/2)+'px)');
+      return;
+    }
+    // the top page on each side: the last leaf turned over (left), the first one not (right)
+    var right=flipped.indexOf(false), left=flipped.lastIndexOf(true);
+    var zr = right<0 ? -T : -sumTh(0,right), zl = left<0 ? -T : -sumTh(left+1,N);
+    put(ribbon,rw,H+tail,'translate3d('+(W-rw/2)+'px,0,'+(Math.max(zr,zl)+1)+'px)');
+  }
+
   function layoutBlocks(){
     var s=flipped.filter(Boolean).length;
     var r0=Math.min(Math.max(s,1),M+1), cR=M+1-r0, tR=cR*u, zTR=-(tb+(r0-1)*u), zBR=zTR-tR;
@@ -636,6 +683,7 @@ window.__rs=function(cw,ch){ var d=window.devicePixelRatio||1, k=Math.max(2,Math
     put(E.lt,W-sq,tL,'translate3d('+sq+'px,'+sq+'px,'+zBL+'px) rotateX(90deg)',pagesBg('to top'));
     put(E.lb,W-sq,tL,'translate3d('+sq+'px,'+(H-sq)+'px,'+zTL+'px) rotateX(-90deg)',pagesBg('to bottom'));
     layoutSpine(s);
+    layoutRibbon(s);
     var x0 = s===N ? 0 : W, x1 = s===0 ? 2*W : (s===N ? W : 2*W); if(s!==0 && s!==N) x0=0;
     var pw=W*.14, pz=W*.26, off=-W*.05;
     put(gSoft,(x1-x0)+2*pw,T+2*pz,'translate3d('+(x0-pw+off)+'px,'+(H+1)+'px,'+(-T-pz-W*.03)+'px) rotateX(90deg)');
@@ -671,6 +719,47 @@ window.__rs=function(cw,ch){ var d=window.devicePixelRatio||1, k=Math.max(2,Math
   function settle(t){ cancelAnimationFrame(raf); orbit.classList.add('live'); ry=norm(ry); orbit.style.transform='rotateX('+rx+'deg) rotateY('+ry+'deg)'; void orbit.offsetWidth; orbit.classList.remove('live'); book.classList.remove('live'); rx=t.rx; ry=t.ry; applyOrbit(); }
 
   window.__bookGo=function(t){ go(t); };
+
+  // ---------- the bookmark ribbon's "jump to" card ----------
+  var SECTIONS=[[0,'','cover'],[1,'1','photo booth'],[2,'2\u20133','gummy jar'],[3,'4\u20135','typewriter'],[4,'','library card']];
+  var menu=document.createElement('div'); menu.className='ribbon-menu'; menu.hidden=true; menu.setAttribute('role','menu'); menu.setAttribute('aria-label','Jump to');
+  menu.innerHTML='<b>jump to\u2026</b>'+SECTIONS.map(function(sct){
+    return '<button type="button" role="menuitem" data-go="'+sct[0]+'"><span>'+sct[1]+'</span>'+sct[2]+'</button>'; }).join('');
+  document.body.appendChild(menu);
+  function openMenu(x,y){
+    [].forEach.call(menu.querySelectorAll('button'),function(b){
+      if(+b.dataset.go===(state===N?0:state)) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
+    menu.hidden=false;
+    var r=menu.getBoundingClientRect(), m=10;
+    menu.style.left=Math.max(m,Math.min(window.innerWidth-r.width-m,x-r.width/2))+'px';
+    menu.style.top=Math.max(m,Math.min(window.innerHeight-r.height-m,y+14))+'px';
+    (menu.querySelector('[aria-current]')||menu.querySelector('button')).focus({preventScroll:true});
+  }
+  function closeMenu(back){ if(menu.hidden) return; menu.hidden=true; if(back) ribbon.focus({preventScroll:true}); }
+  function ribbonTap(x,y){
+    if(!menu.hidden){ closeMenu(); return; }
+    if(x==null){ var r=ribbon.getBoundingClientRect(); x=r.left+r.width/2; y=r.bottom; }
+    openMenu(x,y);
+  }
+  menu.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b) return;
+    var to=+b.dataset.go; closeMenu();
+    window.__track&&window.__track('bookmark_jump',{to:to});
+    go(to);
+  });
+  menu.addEventListener('keydown',function(e){
+    var items=[].slice.call(menu.querySelectorAll('button')), i=items.indexOf(e.target);
+    // Enter and Space choose a page here, since the typewriter keeps Enter for itself
+    if((e.key==='Enter'||e.key===' ') && i>=0){ e.preventDefault(); items[i].click(); }
+    else if(e.key==='Escape'){ e.preventDefault(); closeMenu(true); }
+    else if(e.key==='ArrowDown'){ e.preventDefault(); items[(i+1)%items.length].focus(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); items[(i-1+items.length)%items.length].focus(); }
+    e.stopPropagation();
+  });
+  ribbon.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); e.stopPropagation(); ribbonTap(); } });
+  // a tap anywhere else puts the card away
+  document.addEventListener('pointerdown',function(e){ if(!menu.hidden && !menu.contains(e.target) && !ribbon.contains(e.target)) closeMenu(); });
+
   function go(to){
     to=Math.max(0,Math.min(N,to));
     if(to===state) return;
@@ -725,6 +814,7 @@ window.__rs=function(cw,ch){ var d=window.devicePixelRatio||1, k=Math.max(2,Math
       return;
     }
     if(d.target.closest && (d.target.closest('a') || d.target.closest('#enter'))) return;
+    if(d.target.closest && d.target.closest('.ribbon')){ ribbonTap(d.x,d.y); return; }
     tap(d.target);
   });
   window.addEventListener('pointercancel',function(){ down=null; stage.classList.remove('dragging'); book.classList.remove('live'); });
@@ -1905,7 +1995,9 @@ window.__rs=function(cw,ch){ var d=window.devicePixelRatio||1, k=Math.max(2,Math
     setTimeout(function(){feedT=rowFeed(row);dirty=true;kick();},dur*1000*.7);
     busyUntil=now+dur*1000+(auto?60:40);}
 
-  function active(){return ready&&mode==='idle'&&visible()&&out.hidden&&(function(){var pb=document.getElementById('pb');return !pb||pb.hidden;})();}
+  // (not while the bookmark ribbon or its "jump to" card has the keyboard: Enter there picks a page)
+  function active(){return ready&&mode==='idle'&&visible()&&out.hidden&&(function(){var pb=document.getElementById('pb');return !pb||pb.hidden;})()&&
+    !(document.activeElement&&document.activeElement.closest&&document.activeElement.closest('.ribbon,.ribbon-menu'));}
   function unfocus(){var a=document.activeElement;if(a&&a!==document.body&&(a.tagName==='BUTTON'||a.tagName==='A'))a.blur();}
   document.addEventListener('keydown',function(e){
     if(!active()||e.metaKey||e.ctrlKey||e.altKey)return;
